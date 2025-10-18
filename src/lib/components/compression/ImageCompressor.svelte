@@ -29,6 +29,9 @@
   let format = $state<'jpeg' | 'png' | 'webp'>('jpeg');
   let isCompressing = $state(false);
   let dragOver = $state(false);
+  let useTargetSize = $state(false);
+  let targetSize = $state(500); // Target size in KB
+  let targetUnit = $state<'KB' | 'MB'>('KB');
 
   const dispatch = createEventDispatcher();
 
@@ -130,13 +133,20 @@
 
   async function compressImage(file: File, quality: number, outputFormat: string): Promise<CompressedImage | null> {
     try {
-      // Import the real image converter
-      const { ImageConverter } = await import('$lib/utils/imageConverter.js');
+      let compressedBlob: Blob;
       
-      // Perform real compression
-      const compressedBlob = await ImageConverter.convertImage(file, outputFormat, {
-        quality: quality / 100
-      });
+      if (useTargetSize) {
+        // Compress to target size
+        compressedBlob = await compressToTargetSize(file, outputFormat);
+      } else {
+        // Import the real image converter
+        const { ImageConverter } = await import('$lib/utils/imageConverter.js');
+        
+        // Perform regular quality-based compression
+        compressedBlob = await ImageConverter.convertImage(file, outputFormat, {
+          quality: quality / 100
+        });
+      }
       
       const compressionRatio = ((file.size - compressedBlob.size) / file.size) * 100;
       
@@ -169,6 +179,50 @@
       toastStore.error('Compression failed', `Failed to compress ${file.name}: ${error.message}`);
       return null;
     }
+  }
+
+  async function compressToTargetSize(file: File, outputFormat: string): Promise<Blob> {
+    const targetBytes = targetSize * (targetUnit === 'MB' ? 1024 * 1024 : 1024);
+    const { ImageConverter } = await import('$lib/utils/imageConverter.js');
+    
+    let minQuality = 0.1;
+    let maxQuality = 1.0;
+    let bestBlob: Blob | null = null;
+    let attempts = 0;
+    const maxAttempts = 15;
+
+    // Binary search for the right quality to achieve target size
+    while (attempts < maxAttempts && (maxQuality - minQuality) > 0.01) {
+      const currentQuality = (minQuality + maxQuality) / 2;
+      
+      try {
+        const blob = await ImageConverter.convertImage(file, outputFormat, {
+          quality: currentQuality
+        });
+
+        if (blob.size <= targetBytes) {
+          bestBlob = blob;
+          minQuality = currentQuality;
+        } else {
+          maxQuality = currentQuality;
+        }
+      } catch (error) {
+        console.warn('Quality attempt failed:', currentQuality, error);
+        maxQuality = currentQuality;
+      }
+      
+      attempts++;
+    }
+
+    // If we couldn't achieve the target size, return the best we got
+    if (!bestBlob) {
+      // Fallback to very low quality
+      bestBlob = await ImageConverter.convertImage(file, outputFormat, {
+        quality: 0.1
+      });
+    }
+
+    return bestBlob;
   }
 
   function downloadImage(compressed: CompressedImage) {
@@ -272,12 +326,66 @@
         Compression Settings
       </h3>
       
-      <div class="grid md:grid-cols-2 gap-6">
-        <!-- Quality Settings -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Quality: {quality}%
+      <!-- Compression Mode Toggle -->
+      <div class="mb-6">
+        <div class="flex items-center space-x-4">
+          <label class="flex items-center">
+            <input
+              type="radio"
+              bind:group={useTargetSize}
+              value={false}
+              class="mr-2"
+            />
+            <span class="text-gray-700 dark:text-gray-300">Quality-based compression</span>
           </label>
+          <label class="flex items-center">
+            <input
+              type="radio"
+              bind:group={useTargetSize}
+              value={true}
+              class="mr-2"
+            />
+            <span class="text-gray-700 dark:text-gray-300">Target size compression</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Quality Settings or Target Size -->
+        <div>
+          {#if useTargetSize}
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Target File Size
+            </label>
+            
+            <div class="flex items-center space-x-2 mb-4">
+              <input
+                type="number"
+                bind:value={targetSize}
+                min="1"
+                max={targetUnit === 'MB' ? 100 : 10000}
+                class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                placeholder="Enter size"
+              />
+              <select
+                bind:value={targetUnit}
+                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+              </select>
+            </div>
+            
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p class="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Target Size Mode:</strong> The compressor will automatically adjust quality to achieve your desired file size.
+                Example: 5MB → 500KB
+              </p>
+            </div>
+          {:else}
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Quality: {quality}%
+            </label>
           
           <!-- Quality Presets -->
           <div class="grid grid-cols-2 gap-2 mb-4">
@@ -308,6 +416,7 @@
             <span>Smaller size</span>
             <span>Better quality</span>
           </div>
+          {/if}
         </div>
 
         <!-- Format Selection -->

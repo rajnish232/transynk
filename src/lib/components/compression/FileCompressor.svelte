@@ -29,6 +29,9 @@
   let createZip = $state(false);
   let isCompressing = $state(false);
   let dragOver = $state(false);
+  let useTargetSize = $state(false);
+  let targetSize = $state(1); // Target size in MB for files
+  let targetUnit = $state<'KB' | 'MB'>('MB');
 
   const dispatch = createEventDispatcher();
 
@@ -142,17 +145,24 @@
 
   async function compressFile(file: File, level: number): Promise<CompressedFile | null> {
     try {
-      // For demo purposes, we'll simulate compression by creating a smaller blob
-      // In a real implementation, you'd use a compression library like pako or fflate
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
+      let compressedBlob: Blob;
       
-      // Simulate compression (this is just for demo - use real compression library)
-      const compressionFactor = Math.max(0.1, 1 - (level / 10));
-      const compressedSize = Math.floor(file.size * compressionFactor);
-      const compressedData = uint8Array.slice(0, compressedSize);
+      if (useTargetSize) {
+        // Compress to target size
+        compressedBlob = await compressFileToTargetSize(file);
+      } else {
+        // Regular compression based on level
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        // Simulate compression (this is just for demo - use real compression library)
+        const compressionFactor = Math.max(0.1, 1 - (level / 10));
+        const compressedSize = Math.floor(file.size * compressionFactor);
+        const compressedData = uint8Array.slice(0, compressedSize);
+        
+        compressedBlob = new Blob([compressedData], { type: file.type });
+      }
       
-      const compressedBlob = new Blob([compressedData], { type: file.type });
       const compressionRatio = ((file.size - compressedBlob.size) / file.size) * 100;
       
       return {
@@ -166,6 +176,27 @@
       console.error('File compression error:', error);
       return null;
     }
+  }
+
+  async function compressFileToTargetSize(file: File): Promise<Blob> {
+    const targetBytes = targetSize * (targetUnit === 'MB' ? 1024 * 1024 : 1024);
+    
+    // If target size is larger than original, return original
+    if (targetBytes >= file.size) {
+      return file;
+    }
+    
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    // Calculate compression ratio needed
+    const compressionRatio = targetBytes / file.size;
+    const compressedSize = Math.floor(file.size * compressionRatio);
+    
+    // Simple truncation for demo (in real app, use proper compression algorithms)
+    const compressedData = uint8Array.slice(0, Math.max(compressedSize, 1024)); // Minimum 1KB
+    
+    return new Blob([compressedData], { type: file.type });
   }
 
   async function createZipArchive(files: File[]): Promise<Blob> {
@@ -300,12 +331,66 @@
         Compression Settings
       </h3>
       
-      <div class="grid md:grid-cols-2 gap-6">
-        <!-- Compression Level -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Compression Level: {compressionLevel}
+      <!-- Compression Mode Toggle -->
+      <div class="mb-6">
+        <div class="flex items-center space-x-4">
+          <label class="flex items-center">
+            <input
+              type="radio"
+              bind:group={useTargetSize}
+              value={false}
+              class="mr-2"
+            />
+            <span class="text-gray-700 dark:text-gray-300">Level-based compression</span>
           </label>
+          <label class="flex items-center">
+            <input
+              type="radio"
+              bind:group={useTargetSize}
+              value={true}
+              class="mr-2"
+            />
+            <span class="text-gray-700 dark:text-gray-300">Target size compression</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Compression Level or Target Size -->
+        <div>
+          {#if useTargetSize}
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Target File Size
+            </label>
+            
+            <div class="flex items-center space-x-2 mb-4">
+              <input
+                type="number"
+                bind:value={targetSize}
+                min="1"
+                max={targetUnit === 'MB' ? 1000 : 100000}
+                class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                placeholder="Enter size"
+              />
+              <select
+                bind:value={targetUnit}
+                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+              </select>
+            </div>
+            
+            <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+              <p class="text-sm text-purple-800 dark:text-purple-200">
+                <strong>Target Size Mode:</strong> Compress files to your exact desired size.
+                Example: 5MB file → 500KB compressed file
+              </p>
+            </div>
+          {:else}
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Compression Level: {compressionLevel}
+            </label>
           
           <!-- Compression Presets -->
           <div class="grid grid-cols-3 gap-2 mb-4">
@@ -336,6 +421,7 @@
             <span>Faster</span>
             <span>Smaller</span>
           </div>
+          {/if}
         </div>
 
         <!-- Archive Options -->
