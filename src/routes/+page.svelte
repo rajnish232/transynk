@@ -1,300 +1,291 @@
 <script lang="ts">
-	import Uploader from "$lib/components/functional/Uploader.svelte";
-	import Tooltip from "$lib/components/visual/Tooltip.svelte";
-	import { converters } from "$lib/converters";
-	import { vertdLoaded } from "$lib/store/index.svelte";
-	import clsx from "clsx";
-	import { AudioLines, BookText, Check, Film, Image } from "lucide-svelte";
-	import { m } from "$lib/paraglide/messages";
-	import { OverlayScrollbarsComponent } from "overlayscrollbars-svelte";
-	import { browser } from "$app/environment";
-	import "overlayscrollbars/overlayscrollbars.css";
-	import { onMount } from "svelte";
-	import type { WorkerStatus } from "$lib/converters/converter.svelte";
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { authStore } from '$lib/stores/auth.svelte.js';
+  import { usageStore } from '$lib/stores/usage.svelte.js';
+  import { toastStore } from '$lib/stores/toast.svelte.js';
+  
+  import FileConverter from '$lib/components/conversion/FileConverter.svelte';
+  import QuotaDisplay from '$lib/components/usage/QuotaDisplay.svelte';
+  
+  import { 
+    Zap, 
+    Shield, 
+    Infinity, 
+    Star, 
+    ArrowRight, 
+    CheckCircle,
+    Image,
+    FileText,
+    Video,
+    Music,
+    Maximize2
+  } from 'lucide-svelte';
 
-	const getSupportedFormats = (name: string) =>
-		converters
-			.find((c) => c.name === name)
-			?.supportedFormats.map(
-				(f) =>
-					`${f.name}${f.fromSupported && f.toSupported ? "" : "*"}`,
-			)
-			.join(", ") || "none";
+  let selectedFiles = $state<File[]>([]);
+  let isConverting = $state(false);
 
-	const worker: {
-		[key: string]: {
-			formats: string;
-			icon: typeof Image;
-			title: string;
-			status: WorkerStatus;
-		};
-	} = $derived({
-		Images: {
-			formats: getSupportedFormats("imagemagick"),
-			icon: Image,
-			title: m["upload.cards.images"](),
-			status:
-				converters.find((c) => c.name === "imagemagick")?.status ||
-				"not-ready",
-		},
-		Audio: {
-			formats: getSupportedFormats("ffmpeg"),
-			icon: AudioLines,
-			title: m["upload.cards.audio"](),
-			status:
-				converters.find((c) => c.name === "ffmpeg")?.status ||
-				"not-ready",
-		},
-		Documents: {
-			formats: getSupportedFormats("pandoc"),
-			icon: BookText,
-			title: m["upload.cards.documents"](),
-			status:
-				converters.find((c) => c.name === "pandoc")?.status ||
-				"not-ready",
-		},
-		Video: {
-			formats: getSupportedFormats("vertd"),
-			icon: Film,
-			title: m["upload.cards.video"](),
-			status: $vertdLoaded === true ? "ready" : "not-ready", // not using converter.status for this
-		},
-	});
+  const features = [
+    {
+      icon: Shield,
+      title: 'Privacy First',
+      description: 'All conversions happen locally in your browser. Your files never leave your device.'
+    },
+    {
+      icon: Zap,
+      title: 'Lightning Fast',
+      description: 'Instant conversions powered by WebAssembly. No waiting, no uploading.'
+    },
+    {
+      icon: Infinity,
+      title: 'Unlimited Formats',
+      description: 'Support for images, documents, videos, audio, and more file formats.'
+    },
+    {
+      icon: Star,
+      title: 'Premium Features',
+      description: 'Advanced formats, file compression, and unlimited conversions available.'
+    }
+  ];
 
-	const getTooltip = (format: string) => {
-		const converter = converters.find((c) =>
-			c.supportedFormats.some((sf) => sf.name === format),
-		);
+  const popularConversions = [
+    { from: 'PDF', to: 'Word', icon: FileText, href: '/pdf-to-word' },
+    { from: 'JPG', to: 'PNG', icon: Image, href: '/jpg-to-png' },
+    { from: 'MP4', to: 'MP3', icon: Video, href: '/mp4-to-mp3' },
+    { from: 'WAV', to: 'MP3', icon: Music, href: '/wav-to-mp3' }
+  ];
 
-		const formatInfo = converter?.supportedFormats.find(
-			(sf) => sf.name === format,
-		);
+  const compressionTools = [
+    { name: 'Image Compressor', description: 'Reduce image file sizes', icon: Image, href: '/compress-images' },
+    { name: 'Image Resizer', description: 'Resize images to perfect dimensions', icon: Maximize2, href: '/resize-images' },
+    { name: 'File Compressor', description: 'Compress any file type', icon: FileText, href: '/compress-files' }
+  ];
 
-		if (formatInfo) {
-			const direction = formatInfo.fromSupported
-				? m["upload.tooltip.direction_input"]()
-				: m["upload.tooltip.direction_output"]();
-			return m["upload.tooltip.partial_support"]({ direction });
-		}
-		return "";
-	};
+  onMount(() => {
+    // Listen for dropped files from layout
+    const handleFilesDropped = (event: CustomEvent) => {
+      const { files } = event.detail;
+      handleFilesSelected({ detail: { files } });
+    };
 
-	const getStatusText = (status: WorkerStatus) => {
-		switch (status) {
-			case "downloading":
-				return m["upload.cards.status.downloading"]();
-			case "ready":
-				return m["upload.cards.status.ready"]();
-			default:
-				// "not-ready", "error" and other statuses (somehow)
-				return m["upload.cards.status.not_ready"]();
-		}
-	};
+    window.addEventListener('filesDropped', handleFilesDropped as EventListener);
 
-	let scrollContainers: HTMLElement[] = $state([]);
-	// svelte-ignore state_referenced_locally
-	let showBlur = $state(Array(Object.keys(worker).length).fill(false));
+    return () => {
+      window.removeEventListener('filesDropped', handleFilesDropped as EventListener);
+    };
+  });
 
-	onMount(() => {
-		const handleResize = () => {
-			for (let i = 0; i < scrollContainers.length; i++) {
-				// show bottom blur if scrollable
-				const container = scrollContainers[i];
-				if (!container) return;
-				showBlur[i] = container.scrollHeight > container.clientHeight;
-			}
-		};
+  function handleFilesSelected(event: CustomEvent) {
+    const { files } = event.detail;
+    selectedFiles = files;
+    
+    if (files.length > 0) {
+      // Navigate to convert page or start conversion
+      startConversion();
+    }
+  }
 
-		handleResize();
-		window.addEventListener("resize", handleResize);
+  function handleFileRemoved(event: CustomEvent) {
+    const { index } = event.detail;
+    selectedFiles = selectedFiles.filter((_, i) => i !== index);
+  }
 
-		return () => {
-			window.removeEventListener("resize", handleResize);
-		};
-	});
+  async function startConversion() {
+    if (selectedFiles.length === 0) return;
+
+    if (!usageStore.canConvert) {
+      toastStore.warning('Daily limit reached', 'Upgrade to premium for unlimited conversions');
+      return;
+    }
+
+    isConverting = true;
+    
+    try {
+      // Simulate conversion process
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Log the conversion
+      for (const file of selectedFiles) {
+        await usageStore.logConversion(
+          file.type || 'unknown',
+          'converted',
+          file.size,
+          2000
+        );
+      }
+
+      toastStore.success('Conversion completed!', `Successfully converted ${selectedFiles.length} file(s)`);
+      selectedFiles = [];
+    } catch (error) {
+      toastStore.error('Conversion failed', 'Please try again or contact support');
+    } finally {
+      isConverting = false;
+    }
+  }
+
+  function handleUpgrade() {
+    goto('/pricing');
+  }
 </script>
 
-<div class="max-w-6xl w-full mx-auto px-6 md:px-8">
-	<div class="flex items-center justify-center pb-10 md:py-16">
-		<div
-			class="flex items-center h-auto gap-12 md:gap-24 md:flex-row flex-col"
-		>
-			<div class="flex-grow w-full text-center md:text-left">
-				<h1
-					class="text-4xl px-12 md:p-0 md:text-6xl flex-wrap tracking-tight leading-tight md:leading-[72px] mb-4 md:mb-6"
-				>
-					{m["upload.title"]()}
-				</h1>
-				<p
-					class="font-normal px-5 md:p-0 text-lg md:text-xl text-black text-muted dynadark:text-muted"
-				>
-					{m["upload.subtitle"]()}
-				</p>
-			</div>
-			<div class="flex-grow w-full h-72">
-				<Uploader class="w-full h-full" />
-			</div>
-		</div>
-	</div>
+<svelte:head>
+  <title>Transynk - Modern File Converter & Compressor</title>
+  <meta name="description" content="Convert and compress files instantly with Transynk. Support for images, documents, videos, and more. Privacy-first local processing." />
+</svelte:head>
 
-	<hr />
+<div class="space-y-16">
+  <!-- Hero Section -->
+  <section class="text-center py-12">
+    <div class="max-w-4xl mx-auto">
+      <h1 class="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
+        Convert Files
+        <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          Instantly
+        </span>
+      </h1>
+      <p class="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+        Transform any file format with our modern, privacy-first converter. 
+        No uploads, no waiting - everything happens in your browser.
+      </p>
+      
+      <!-- Usage Stats -->
+      <div class="flex justify-center mb-12">
+        <QuotaDisplay on:upgrade={handleUpgrade} />
+      </div>
+    </div>
+  </section>
 
-	<div class="mt-10 md:mt-16">
-		<h2 class="text-center text-4xl">{m["upload.cards.title"]()}</h2>
+  <!-- File Converter -->
+  <section class="max-w-4xl mx-auto">
+    <FileConverter on:upgrade={handleUpgrade} />
+  </section>
 
-		<div class="flex gap-4 mt-8 md:flex-row flex-col">
-			{#if browser}
-				{#each Object.entries(worker) as [key, s], i}
-					{@const Icon = s.icon}
-					<div class="file-category-card w-full flex flex-col gap-4">
-						<div class="file-category-card-inner">
-							<div
-								class={clsx("icon-container", {
-									"bg-accent-blue": key === "Images",
-									"bg-accent-purple": key === "Audio",
-									"bg-accent-green": key === "Documents",
-									"bg-accent-red": key === "Video",
-								})}
-							>
-								<Icon size="20" />
-							</div>
-							<span>{s.title}</span>
-						</div>
+  <!-- Popular Conversions -->
+  <section class="max-w-4xl mx-auto">
+    <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
+      Popular Conversions
+    </h2>
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {#each popularConversions as conversion}
+        <a
+          href={conversion.href}
+          class="group p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-lg transition-all duration-200"
+        >
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
+              <conversion.icon class="text-white" size={20} />
+            </div>
+            <div>
+              <div class="font-medium text-gray-900 dark:text-white">
+                {conversion.from} → {conversion.to}
+              </div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">
+                Convert now
+              </div>
+            </div>
+          </div>
+        </a>
+      {/each}
+    </div>
+  </section>
 
-						<div
-							class="file-category-card-content flex-grow relative"
-						>
-							<OverlayScrollbarsComponent
-								options={{
-									scrollbars: {
-										autoHide: "move",
-										autoHideDelay: 1500,
-									},
-								}}
-								defer
-							>
-								<div
-									class="flex flex-col gap-4 h-[12.25rem] relative"
-									bind:this={scrollContainers[i]}
-								>
-									{#if key === "Video"}
-										<p
-											class="flex tems-center justify-center gap-2"
-										>
-											<Check size="20" />
-											<Tooltip
-												text={m[
-													"upload.tooltip.video_server_processing"
-												]()}
-											>
-												<span>
-													<a
-														href="https://github.com/VERT-sh/VERT/blob/main/docs/VIDEO_CONVERSION.md"
-														target="_blank"
-														rel="noopener noreferrer"
-													>
-														{m[
-															"upload.cards.video_server_processing"
-														]()}
-													</a>
-													<span
-														class="text-red-500 -ml-0.5"
-														>*</span
-													>
-												</span>
-											</Tooltip>
-										</p>
-									{:else}
-										<p
-											class="flex tems-center justify-center gap-2"
-										>
-											<Check size="20" />
-											{m[
-												"upload.cards.local_supported"
-											]()}
-										</p>
-									{/if}
-									<p>
-										{@html m["upload.cards.status.text"]({
-											status: getStatusText(s.status),
-										})}
-									</p>
-									<div
-										class="flex flex-col items-center relative"
-									>
-										<b
-											>{m[
-												"upload.cards.supported_formats"
-											]()}&nbsp;</b
-										>
-										<p
-											class="flex flex-wrap justify-center leading-tight px-2"
-										>
-											{#each s.formats.split(", ") as format, index}
-												{@const isPartial =
-													format.endsWith("*")}
-												{@const formatName = isPartial
-													? format.slice(0, -1)
-													: format}
-												<span
-													class="text-sm font-normal flex items-center relative"
-												>
-													{#if isPartial}
-														<Tooltip
-															text={getTooltip(
-																formatName,
-															)}
-														>
-															{formatName}<span
-																class="text-red-500"
-																>*</span
-															>
-														</Tooltip>
-													{:else}
-														{formatName}
-													{/if}
-													{#if index < s.formats.split(", ").length - 1}
-														<span>,&nbsp;</span>
-													{/if}
-												</span>
-											{/each}
-										</p>
-									</div>
-								</div>
-							</OverlayScrollbarsComponent>
-							<!-- blur at bottom if scrollable - positioned relative to the card container -->
-							{#if showBlur[i]}
-								<div
-									class="absolute left-0 bottom-0 w-full h-10 pointer-events-none"
-									style={`background: linear-gradient(to top, var(--bg-panel), transparent 100%);`}
-								></div>
-							{/if}
-						</div>
-					</div>
-				{/each}
-			{/if}
-		</div>
-	</div>
+  <!-- Compression Tools -->
+  <section class="max-w-4xl mx-auto">
+    <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
+      Compression Tools
+    </h2>
+    <div class="grid md:grid-cols-3 gap-6">
+      {#each compressionTools as tool}
+        <a
+          href={tool.href}
+          class="group p-6 bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-600 hover:shadow-lg transition-all duration-200"
+        >
+          <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-blue-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
+              <tool.icon class="text-white" size={24} />
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900 dark:text-white mb-1">
+                {tool.name}
+              </h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                {tool.description}
+              </p>
+            </div>
+            <ArrowRight class="text-gray-400 group-hover:text-green-500 transition-colors" size={20} />
+          </div>
+        </a>
+      {/each}
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="max-w-6xl mx-auto">
+    <h2 class="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">
+      Why Choose Transynk?
+    </h2>
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+      {#each features as feature}
+        <div class="text-center">
+          <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center">
+            <feature.icon class="text-white" size={24} />
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            {feature.title}
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400 text-sm">
+            {feature.description}
+          </p>
+        </div>
+      {/each}
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl p-8 md:p-12 text-center">
+    <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Ready for Unlimited Conversions?
+    </h2>
+    <p class="text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+      Upgrade to premium and unlock unlimited conversions, advanced formats, 
+      file compression, and priority support.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <button
+        onclick={() => goto('/pricing')}
+        class="px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center"
+      >
+        View Pricing
+        <ArrowRight class="ml-2" size={18} />
+      </button>
+      <button
+        onclick={() => goto('/about')}
+        class="px-8 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200"
+      >
+        Learn More
+      </button>
+    </div>
+  </section>
+
+  <!-- Trust Indicators -->
+  <section class="text-center py-8">
+    <div class="flex flex-wrap justify-center items-center gap-8 text-gray-500 dark:text-gray-400">
+      <div class="flex items-center space-x-2">
+        <CheckCircle size={20} />
+        <span class="text-sm">100% Private</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <CheckCircle size={20} />
+        <span class="text-sm">No File Uploads</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <CheckCircle size={20} />
+        <span class="text-sm">Instant Processing</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <CheckCircle size={20} />
+        <span class="text-sm">Secure & Fast</span>
+      </div>
+    </div>
+  </section>
 </div>
-
-<style>
-	.file-category-card {
-		@apply bg-panel rounded-2xl p-5 shadow-panel relative;
-	}
-
-	.file-category-card p {
-		@apply font-normal text-center text-sm;
-	}
-
-	.file-category-card-inner {
-		@apply flex items-center justify-center gap-3 text-xl;
-	}
-
-	.file-category-card-content {
-		@apply flex flex-col text-center justify-between;
-	}
-
-	.icon-container {
-		@apply p-2 rounded-full text-on-accent;
-	}
-</style>

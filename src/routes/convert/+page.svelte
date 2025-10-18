@@ -1,401 +1,213 @@
 <script lang="ts">
-	import ConversionPanel from "$lib/components/functional/ConversionPanel.svelte";
-	import FormatDropdown from "$lib/components/functional/FormatDropdown.svelte";
-	import Uploader from "$lib/components/functional/Uploader.svelte";
-	import Panel from "$lib/components/visual/Panel.svelte";
-	import ProgressBar from "$lib/components/visual/ProgressBar.svelte";
-	import Tooltip from "$lib/components/visual/Tooltip.svelte";
-	import { categories, converters, byNative } from "$lib/converters";
-	import {
-		effects,
-		files,
-		gradientColor,
-		showGradient,
-		vertdLoaded,
-	} from "$lib/store/index.svelte";
-	import { VertFile } from "$lib/types";
-	import {
-		AudioLines,
-		BookText,
-		DownloadIcon,
-		FileMusicIcon,
-		FileQuestionIcon,
-		FileVideo2,
-		FilmIcon,
-		ImageIcon,
-		ImageOffIcon,
-		RotateCwIcon,
-		XIcon,
-	} from "lucide-svelte";
-	import { m } from "$lib/paraglide/messages";
-	import { Settings } from "$lib/sections/settings/index.svelte";
+  import { goto } from '$app/navigation';
+  import FileConverter from '$lib/components/conversion/FileConverter.svelte';
+  import { ArrowRight, Zap, Shield, Infinity } from 'lucide-svelte';
 
-	let processedFileIds = $state(new Set<string>());
-
-	$effect(() => {
-		if (!Settings.instance.settings || files.files.length === 0) return;
-
-		files.files.forEach((file) => {
-			const settings = Settings.instance.settings;
-			if (processedFileIds.has(file.id)) return;
-
-			const converter = file.findConverter();
-			if (!converter) return;
-
-			let category: string | undefined;
-			const isImage = converter.name === "imagemagick";
-			const isAudio = converter.name === "ffmpeg";
-			const isVideo = converter.name === "vertd";
-			const isDocument = converter.name === "pandoc";
-
-			if (isImage) category = "image";
-			else if (isAudio) category = "audio";
-			else if (isVideo) category = "video";
-			else if (isDocument) category = "doc";
-			if (!category) return;
-
-			let targetFormat: string | undefined;
-
-			// use default format if enabled
-			if (settings.useDefaultFormat) {
-				let defaultFormat: string | undefined;
-				const df = settings.defaultFormat;
-				if (category === "image") defaultFormat = df.image;
-				else if (category === "audio") defaultFormat = df.audio;
-				else if (category === "video") defaultFormat = df.video;
-				else if (category === "doc") defaultFormat = df.document;
-
-				if (
-					defaultFormat &&
-					defaultFormat !== file.from &&
-					categories[category]?.formats.includes(defaultFormat)
-				) {
-					targetFormat = defaultFormat;
-				}
-			}
-
-			// else use first available format (or if default format is same as input)
-			if (!targetFormat) {
-				const firstDiff = categories[category]?.formats.find(
-					(f) => f !== file.from,
-				);
-				targetFormat =
-					firstDiff || categories[category]?.formats[0] || "";
-			}
-
-			file.to = targetFormat;
-			processedFileIds.add(file.id);
-		});
-	});
-
-	const handleSelect = (option: string, file: VertFile) => {
-		file.result = null;
-	};
-
-	$effect(() => {
-		// Set gradient color depending on the file types
-		let type = "";
-		if (files.files.length) {
-			const converters = files.files.map(
-				(file) => file.findConverter()?.name,
-			);
-			const uniqueTypes = new Set(converters);
-
-			if (uniqueTypes.size === 1) {
-				const onlyType = converters[0];
-				if (onlyType === "imagemagick") type = "blue";
-				else if (onlyType === "ffmpeg") type = "purple";
-				else if (onlyType === "vertd") type = "red";
-				else if (onlyType === "pandoc") type = "green";
-			}
-		}
-
-		if (files.files.length === 0 || !type) {
-			showGradient.set(false);
-		} else showGradient.set(true);
-
-		gradientColor.set(type);
-
-		// TODO: filter out categories that cant be converted between
-	});
+  function handleUpgrade() {
+    goto('/pricing');
+  }
 </script>
 
-{#snippet fileItem(file: VertFile, index: number)}
-	{@const currentConverter = file.findConverter()}
-	{@const isImage = currentConverter?.name === "imagemagick"}
-	{@const isAudio = currentConverter?.name === "ffmpeg"}
-	{@const isVideo = currentConverter?.name === "vertd"}
-	{@const isDocument = currentConverter?.name === "pandoc"}
-	<Panel class="p-5 flex flex-col min-w-0 gap-4 relative">
-		<div class="flex-shrink-0 h-8 w-full flex items-center gap-2">
-			{#if !converters.length}
-				<Tooltip
-					text={m["convert.tooltips.unknown_file"]()}
-					position="bottom"
-				>
-					<FileQuestionIcon size="24" class="flex-shrink-0" />
-				</Tooltip>
-			{:else if isAudio}
-				<Tooltip
-					text={m["convert.tooltips.audio_file"]()}
-					position="bottom"
-				>
-					<AudioLines size="24" class="flex-shrink-0" />
-				</Tooltip>
-			{:else if isVideo}
-				<Tooltip
-					text={m["convert.tooltips.video_file"]()}
-					position="bottom"
-				>
-					<FilmIcon size="24" class="flex-shrink-0" />
-				</Tooltip>
-			{:else if isDocument}
-				<Tooltip
-					text={m["convert.tooltips.document_file"]()}
-					position="bottom"
-				>
-					<BookText size="24" class="flex-shrink-0" />
-				</Tooltip>
-			{:else}
-				<Tooltip
-					text={m["convert.tooltips.image_file"]()}
-					position="bottom"
-				>
-					<ImageIcon size="24" class="flex-shrink-0" />
-				</Tooltip>
-			{/if}
-			<div class="flex-grow overflow-hidden">
-				{#if file.processing}
-					<ProgressBar
-						min={0}
-						max={100}
-						progress={currentConverter?.reportsProgress
-							? file.progress
-							: null}
-					/>
-				{:else}
-					<h2
-						class="text-xl font-body overflow-hidden text-ellipsis whitespace-nowrap"
-						title={file.name}
-					>
-						{file.name}
-					</h2>
-				{/if}
-			</div>
-			<button
-				class="flex-shrink-0 w-8 rounded-full hover:bg-panel-alt h-full flex items-center justify-center"
-				onclick={async () => {
-					await file.cancel();
-					files.files = files.files.filter((_, i) => i !== index);
-				}}
-			>
-				<XIcon size="24" class="text-muted" />
-			</button>
-		</div>
-		{#if !currentConverter}
-			{#if file.name.startsWith("vertd")}
-				<div
-					class="h-full flex flex-col text-center justify-center text-failure"
-				>
-					<p class="font-body font-bold">
-						{m["convert.errors.cant_convert"]()}
-					</p>
-					<p class="font-normal">
-						{m["convert.errors.vertd_server"]()}
-					</p>
-				</div>
-			{:else}
-				<div
-					class="h-full flex flex-col text-center justify-center text-failure"
-				>
-					<p class="font-body font-bold">
-						{m["convert.errors.cant_convert"]()}
-					</p>
-					<p class="font-normal">
-						{m["convert.errors.unsupported_format"]()}
-					</p>
-				</div>
-			{/if}
-		{:else if currentConverter.status === "downloading"}
-			<div
-				class="h-full flex flex-col text-center justify-center text-failure"
-			>
-				<p class="font-body font-bold">
-					{m["convert.errors.cant_convert"]()}
-				</p>
-				<p class="font-normal">
-					{m["convert.errors.worker_downloading"]({
-						type: isAudio
-							? m["convert.errors.audio"]()
-							: isVideo
-								? "Video"
-								: isDocument
-									? m["convert.errors.doc"]()
-									: m["convert.errors.image"](),
-					})}
-				</p>
-			</div>
-		{:else if currentConverter.status === "error"}
-			<div
-				class="h-full flex flex-col text-center justify-center text-failure"
-			>
-				<p class="font-body font-bold">
-					{m["convert.errors.cant_convert"]()}
-				</p>
-				<p class="font-normal">
-					{m["convert.errors.worker_error"]({
-						type: isAudio
-							? m["convert.errors.audio"]()
-							: isVideo
-								? "Video"
-								: isDocument
-									? m["convert.errors.doc"]()
-									: m["convert.errors.image"](),
-					})}
-				</p>
-			</div>
-		{:else if currentConverter.status === "not-ready"}
-			<div
-				class="h-full flex flex-col text-center justify-center text-failure"
-			>
-				<p class="font-body font-bold">
-					{m["convert.errors.cant_convert"]()}
-				</p>
-				<p class="font-normal">
-					{m["convert.errors.worker_timeout"]({
-						type: isAudio
-							? m["convert.errors.audio"]()
-							: isVideo
-								? "Video"
-								: isDocument
-									? m["convert.errors.doc"]()
-									: m["convert.errors.image"](),
-					})}
-				</p>
-			</div>
-		{:else if isVideo && !$vertdLoaded && !isAudio && !isImage && !isDocument}
-			<div
-				class="h-full flex flex-col text-center justify-center text-failure"
-			>
-				<p class="font-body font-bold">
-					{m["convert.errors.cant_convert"]()}
-				</p>
-				<p class="font-normal">
-					{m["convert.errors.vertd_not_found"]()}
-				</p>
-			</div>
-		{:else}
-			<div class="flex flex-row justify-between">
-				<div
-					class="flex gap-4 w-full h-[152px] overflow-hidden relative"
-				>
-					<div class="w-1/2 h-full overflow-hidden rounded-xl">
-						{#if file.blobUrl}
-							<img
-								class="object-cover w-full h-full"
-								src={file.blobUrl}
-								alt={file.name}
-							/>
-						{:else}
-							<div
-								class="w-full h-full flex items-center justify-center text-black"
-								style="background: var({isAudio
-									? '--bg-gradient-purple-alt'
-									: isVideo
-										? '--bg-gradient-red-alt'
-										: isDocument
-											? '--bg-gradient-green-alt'
-											: '--bg-gradient-blue-alt'})"
-							>
-								{#if isAudio}
-									<FileMusicIcon size="56" />
-								{:else if isVideo}
-									<FileVideo2 size="56" />
-								{:else if isDocument}
-									<BookText size="56" />
-								{:else}
-									<ImageOffIcon size="56" />
-								{/if}
-							</div>
-						{/if}
-					</div>
-				</div>
-				<div
-					class="absolute top-16 right-0 mr-4 pl-2 h-[calc(100%-83px)] w-[calc(50%-38px)] pr-4 pb-1 flex items-center justify-center aspect-square"
-				>
-					<div
-						class="w-[122px] h-fit flex flex-col gap-2 items-center justify-center"
-					>
-						<FormatDropdown
-							{categories}
-							from={file.from}
-							bind:selected={file.to}
-							onselect={(option) => handleSelect(option, file)}
-						/>
-						<div class="w-full flex items-center justify-between">
-							<Tooltip
-								text={m["convert.tooltips.convert_file"]()}
-								position="bottom"
-							>
-								<button
-									class="btn {$effects
-										? ''
-										: '!scale-100'} p-0 w-14 h-14 text-black {isAudio
-										? 'bg-accent-purple'
-										: isVideo
-											? 'bg-accent-red'
-											: isDocument
-												? 'bg-accent-green'
-												: 'bg-accent-blue'}"
-									disabled={!files.ready}
-									onclick={() => file.convert()}
-								>
-									<RotateCwIcon size="24" />
-								</button>
-							</Tooltip>
-							<Tooltip
-								text={m["convert.tooltips.download_file"]()}
-								position="bottom"
-							>
-								<button
-									class="btn {$effects
-										? ''
-										: '!scale-100'} p-0 w-14 h-14"
-									onclick={file.download}
-									disabled={!file.result}
-								>
-									<DownloadIcon size="24" />
-								</button>
-							</Tooltip>
-						</div>
-					</div>
-				</div>
-			</div>
-		{/if}
-	</Panel>
-{/snippet}
+<svelte:head>
+  <title>File Converter - Convert Any File Format | Transynk</title>
+  <meta name="description" content="Convert any file format with Transynk. Support for images, documents, audio, video, and archives. Choose your output format and download instantly." />
+  <meta name="keywords" content="file converter, convert files, file format converter, online converter, free converter" />
+</svelte:head>
 
-<div class="flex flex-col justify-center items-center gap-8 -mt-4 px-4 md:p-0">
-	<div class="max-w-[778px] w-full">
-		<ConversionPanel />
-	</div>
+<div class="max-w-6xl mx-auto space-y-12">
+  <!-- Hero Section -->
+  <section class="text-center py-8">
+    <h1 class="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+      Universal File Converter
+    </h1>
+    <p class="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
+      Convert any file to any format instantly. Choose from 100+ supported formats 
+      including images, documents, audio, video, and archives.
+    </p>
 
-	<div
-		class="w-full max-w-[778px] grid grid-cols-1 md:grid-cols-2 auto-rows-[240px] gap-4 md:p-0"
-	>
-		{#each files.files as file, i (file.id)}
-			{#if files.files.length >= 2 && i === 1}
-				<Uploader
-					class="w-full h-full col-start-1 row-start-1 md:col-start-2"
-				/>
-			{/if}
-			{@render fileItem(file, i)}
-			{#if files.files.length < 2}
-				<Uploader class="w-full h-full" />
-			{/if}
-		{/each}
-		{#if files.files.length === 0}
-			<Uploader class="w-full h-full col-span-2" />
-		{/if}
-	</div>
+    <!-- Key Benefits -->
+    <div class="flex flex-wrap justify-center gap-6 mb-8">
+      <div class="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+        <Shield size={20} />
+        <span class="font-medium">100% Private</span>
+      </div>
+      <div class="flex items-center space-x-2 text-purple-600 dark:text-purple-400">
+        <Zap size={20} />
+        <span class="font-medium">Instant Results</span>
+      </div>
+      <div class="flex items-center space-x-2 text-green-600 dark:text-green-400">
+        <Infinity size={20} />
+        <span class="font-medium">Unlimited Usage</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- File Converter Component -->
+  <section>
+    <FileConverter on:upgrade={handleUpgrade} />
+  </section>
+
+  <!-- Supported Formats -->
+  <section class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-8">
+    <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
+      Supported File Formats
+    </h2>
+    
+    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+          <span class="text-blue-600 dark:text-blue-400 text-lg">🖼️</span>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Images</h3>
+        <p class="text-xs text-gray-600 dark:text-gray-400">
+          JPG, PNG, WebP, GIF, BMP, TIFF, SVG
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-3 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+          <span class="text-green-600 dark:text-green-400 text-lg">📄</span>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Documents</h3>
+        <p class="text-xs text-gray-600 dark:text-gray-400">
+          PDF, Word, Excel, PowerPoint, TXT
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-3 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+          <span class="text-purple-600 dark:text-purple-400 text-lg">🎵</span>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Audio</h3>
+        <p class="text-xs text-gray-600 dark:text-gray-400">
+          MP3, WAV, AAC, OGG, FLAC, M4A
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-3 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+          <span class="text-red-600 dark:text-red-400 text-lg">🎬</span>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Video</h3>
+        <p class="text-xs text-gray-600 dark:text-gray-400">
+          MP4, AVI, MOV, WebM, MKV, WMV
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-3 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
+          <span class="text-orange-600 dark:text-orange-400 text-lg">📦</span>
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Archives</h3>
+        <p class="text-xs text-gray-600 dark:text-gray-400">
+          ZIP, RAR, 7Z, TAR, GZ
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section>
+    <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
+      How It Works
+    </h2>
+    
+    <div class="grid md:grid-cols-4 gap-6">
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+          1
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Upload Files</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          Drag and drop or select the files you want to convert
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+          2
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Choose Format</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          Select the output format from our extensive list
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+          3
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Convert</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          Our engine processes your files locally and securely
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+          4
+        </div>
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-2">Download</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          Download your converted files instantly
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl p-8">
+    <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
+      Why Choose Transynk?
+    </h2>
+    
+    <div class="grid md:grid-cols-3 gap-8">
+      <div class="text-center">
+        <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center">
+          <Shield class="text-white" size={24} />
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Privacy First</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          All conversions happen locally in your browser. Your files never leave your device.
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
+          <Zap class="text-white" size={24} />
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Lightning Fast</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          Powered by WebAssembly for instant conversions. No waiting, no uploading.
+        </p>
+      </div>
+      
+      <div class="text-center">
+        <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-green-500 to-blue-500 rounded-2xl flex items-center justify-center">
+          <Infinity class="text-white" size={24} />
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Unlimited Usage</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm">
+          Convert as many files as you want with our ad-supported free plan.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="text-center">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+      Ready to Go Ad-Free?
+    </h2>
+    <p class="text-gray-600 dark:text-gray-300 mb-6">
+      Upgrade to premium for an ad-free experience and access to premium formats.
+    </p>
+    <button
+      onclick={() => goto('/pricing')}
+      class="px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center mx-auto"
+    >
+      View Pricing
+      <ArrowRight class="ml-2" size={18} />
+    </button>
+  </section>
 </div>

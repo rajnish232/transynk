@@ -1,208 +1,184 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { goto, beforeNavigate, afterNavigate } from "$app/navigation";
+  import { onMount } from 'svelte';
+  import { goto, beforeNavigate, afterNavigate } from '$app/navigation';
+  import { browser } from '$app/environment';
+  import { page } from '$app/stores';
 
-	import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME } from "$env/static/public";
-	import { VERT_NAME } from "$lib/consts";
-	import * as Layout from "$lib/components/layout";
-	import * as Navbar from "$lib/components/layout/Navbar";
-	import featuredImage from "$lib/assets/VERT_Feature.webp";
-	import { Settings } from "$lib/sections/settings/index.svelte";
-	import {
-		files,
-		isMobile,
-		effects,
-		theme,
-		dropping,
-		vertdLoaded,
-		locale,
-		updateLocale,
-	} from "$lib/store/index.svelte";
-	import "$lib/css/app.scss";
-	import { browser } from "$app/environment";
-	import { page } from "$app/state";
-	import { initStores as initAnimStores } from "$lib/animation/index.js";
-	import { locales, localizeHref } from "$lib/paraglide/runtime";
-	import { VertdInstance } from "$lib/sections/settings/vertdSettings.svelte.js";
+  import Header from '$lib/components/layout/Header.svelte';
+  import Footer from '$lib/components/layout/Footer.svelte';
+  import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
+  import AdSlot from '$lib/components/ads/AdSlot.svelte';
+  
+  import { authStore } from '$lib/stores/auth.svelte.js';
+  import { usageStore } from '$lib/stores/usage.svelte.js';
+  import { toastStore } from '$lib/stores/toast.svelte.js';
 
-	let { children, data } = $props();
-	let enablePlausible = $state(false);
+  import '$lib/css/app.scss';
 
-	let scrollPositions = new Map<string, number>();
+  let { children } = $props();
 
-	beforeNavigate((nav) => {
-		if (!nav.from || !$isMobile) return;
-		scrollPositions.set(nav.from.url.pathname, window.scrollY);
-	});
+  let dropping = $state(false);
+  let isMobile = $state(false);
 
-	afterNavigate((nav) => {
-		if (!$isMobile) return;
-		const scrollY = nav.to
-			? scrollPositions.get(nav.to.url.pathname) || 0
-			: 0;
-		window.scrollTo(0, scrollY);
-	});
+  onMount(() => {
+    // Initialize mobile detection
+    const handleResize = () => {
+      isMobile = window.innerWidth <= 768;
+    };
+    
+    isMobile = window.innerWidth <= 768;
+    window.addEventListener('resize', handleResize);
 
-	const dropFiles = (e: DragEvent) => {
-		e.preventDefault();
-		dropping.set(false);
-		if (page.url.pathname !== "/jpegify/") {
-			const oldLength = files.files.length;
-			files.add(e.dataTransfer?.files);
-			if (oldLength !== files.files.length) goto("/convert");
-		} else {
-			files.add(e.dataTransfer?.files);
-		}
-	};
+    // Initialize theme
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+    
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(theme);
 
-	const handleDrag = (e: DragEvent, drag: boolean) => {
-		e.preventDefault();
-		dropping.set(drag);
-	};
+    // Initialize auth and usage
+    if (authStore.isAuthenticated) {
+      usageStore.fetchUsage();
+    }
 
-	const handlePaste = (e: ClipboardEvent) => {
-		const clipboardData = e.clipboardData;
-		if (!clipboardData || !clipboardData.files.length) return;
-		e.preventDefault();
+    // Handle file paste
+    const handlePaste = (e: ClipboardEvent) => {
+      const clipboardData = e.clipboardData;
+      if (!clipboardData || !clipboardData.files.length) return;
+      
+      e.preventDefault();
+      handleFiles(Array.from(clipboardData.files));
+    };
 
-		if (page.url.pathname !== "/jpegify/") {
-			const oldLength = files.files.length;
-			files.add(clipboardData.files);
-			if (oldLength !== files.files.length) goto("/convert");
-		} else {
-			files.add(clipboardData.files);
-		}
-	};
+    window.addEventListener('paste', handlePaste);
 
-	onMount(() => {
-		initAnimStores();
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('paste', handlePaste);
+    };
+  });
 
-		const handleResize = () => {
-			isMobile.set(window.innerWidth <= 768);
-		};
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    if (usageStore.canConvert) {
+      dropping = true;
+    }
+  }
 
-		isMobile.set(window.innerWidth <= 768); // initial page load
-		window.addEventListener("resize", handleResize); // handle window resize
-		window.addEventListener("paste", handlePaste);
+  function handleDragLeave(e: DragEvent) {
+    e.preventDefault();
+    dropping = false;
+  }
 
-		effects.set(localStorage.getItem("effects") !== "false"); // defaults to true if not set
-		theme.set(
-			(localStorage.getItem("theme") as "light" | "dark") || "light",
-		);
-		updateLocale(localStorage.getItem("locale") || "en");
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    dropping = false;
+    
+    if (!usageStore.canConvert) {
+      toastStore.warning('Daily limit reached', 'Upgrade to premium for unlimited conversions');
+      return;
+    }
 
-		Settings.instance.load();
+    const files = Array.from(e.dataTransfer?.files || []);
+    handleFiles(files);
+  }
 
-		VertdInstance.instance
-			.url()
-			.then((u) => fetch(`${u}/api/version`))
-			.then((res) => {
-				if (res.ok) $vertdLoaded = true;
-			});
+  function handleFiles(files: File[]) {
+    if (files.length === 0) return;
 
-		return () => {
-			window.removeEventListener("paste", handlePaste);
-			window.removeEventListener("resize", handleResize);
-		};
-	});
+    // Navigate to convert page if not already there
+    if ($page.url.pathname !== '/convert' && $page.url.pathname !== '/') {
+      goto('/convert');
+    }
 
-	$effect(() => {
-		enablePlausible =
-			!!PUB_PLAUSIBLE_URL && Settings.instance.settings.plausible;
-		if (!enablePlausible && browser) {
-			// reset pushState on opt-out so that plausible stops firing events on page navigation
-			history.pushState = History.prototype.pushState;
-		}
-	});
+    // Dispatch custom event for file handling
+    window.dispatchEvent(new CustomEvent('filesDropped', { detail: { files } }));
+  }
 </script>
 
 <svelte:head>
-	<title>{VERT_NAME}</title>
-	<meta name="theme-color" content="#F2ABEE" />
-	<meta
-		name="title"
-		content="{VERT_NAME} — Free, fast, and awesome file converter"
-	/>
-	<meta
-		name="description"
-		content="With VERT you can quickly convert any image, video and audio file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
-	/>
-	<meta property="og:type" content="website" />
-	<meta
-		property="og:title"
-		content="{VERT_NAME} — Free, fast, and awesome file converter"
-	/>
-	<meta
-		property="og:description"
-		content="With VERT you can quickly convert any image, video and audio file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
-	/>
-	<meta property="og:image" content={featuredImage} />
-	<meta property="twitter:card" content="summary_large_image" />
-	<meta
-		property="twitter:title"
-		content="{VERT_NAME} — Free, fast, and awesome file converter"
-	/>
-	<meta
-		property="twitter:description"
-		content="With VERT you can quickly convert any image, video and audio file. No ads, no tracking, open source, and all processing (other than video) is done on your device."
-	/>
-	<meta property="twitter:image" content={featuredImage} />
-	<link rel="manifest" href="/manifest.json" />
-	{#if enablePlausible}
-		<script
-			defer
-			data-domain={PUB_HOSTNAME || "vert.sh"}
-			src="{PUB_PLAUSIBLE_URL}/js/script.js"
-		></script>
-	{/if}
-	{#if data.isAprilFools}
-		<style>
-			* {
-				font-family: "Comic Sans MS", "Comic Sans", cursive !important;
-			}
-		</style>
-	{/if}
+  <title>Transynk - Modern File Converter & Compressor</title>
+  <meta name="theme-color" content="#6366f1" />
 </svelte:head>
 
-<!-- FIXME: if user resizes between desktop/mobile, highlight of page disappears (only shows on original size) -->
-{#key $locale}
-	<div
-		class="flex flex-col min-h-screen h-full w-full overflow-x-hidden"
-		ondrop={dropFiles}
-		ondragenter={(e) => handleDrag(e, true)}
-		ondragover={(e) => handleDrag(e, true)}
-		ondragleave={(e) => handleDrag(e, false)}
-		role="region"
-	>
-		<Layout.UploadRegion />
+<div 
+  class="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200"
+  role="application"
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
+>
+  <!-- Drag Overlay -->
+  {#if dropping}
+    <div class="fixed inset-0 z-50 bg-blue-500/20 backdrop-blur-sm flex items-center justify-center">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-2xl border-2 border-dashed border-blue-500">
+        <div class="text-center">
+          <div class="w-16 h-16 mx-auto mb-4 bg-blue-500 rounded-full flex items-center justify-center">
+            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Drop files to convert
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400">
+            Release to start processing your files
+          </p>
+        </div>
+      </div>
+    </div>
+  {/if}
 
-		<div>
-			<Layout.MobileLogo />
-			<Navbar.Desktop />
-		</div>
+  <!-- Header -->
+  <Header />
 
-		<!-- 
-		SvelteKit throws the following warning when developing - safe to ignore as we render the children in this component:
-		`<slot />` or `{@render ...}` tag missing — inner content will not be rendered
-	-->
-		<Layout.PageContent {children} />
-		<div style="display:none">
-			{#each locales as locale}
-				<a href={localizeHref(page.url.pathname, { locale })}
-					>{locale}</a
-				>
-			{/each}
-		</div>
+  <!-- Header Ad Slot -->
+  <div class="container mx-auto px-4 py-2">
+    <AdSlot slot="header" size="banner" />
+  </div>
 
-		<Layout.Toasts />
-		<Layout.Dialogs />
+  <!-- Main Content -->
+  <main class="flex-1">
+    <div class="container mx-auto px-4 py-8">
+      <div class="flex gap-6">
+        <!-- Left Sidebar Ad (Desktop Only) -->
+        <div class="hidden xl:block w-64 flex-shrink-0">
+          <div class="sticky top-24 space-y-4">
+            <AdSlot slot="sidebar" size="large" position="left" />
+            <AdSlot slot="sidebar" size="medium" position="left" />
+          </div>
+        </div>
 
-		<div>
-			<Layout.Footer />
-			<Navbar.Mobile />
-		</div>
-	</div>
-{/key}
+        <!-- Content -->
+        <div class="flex-1 min-w-0">
+          <!-- Content Top Ad (Desktop Only) -->
+          <div class="hidden lg:block mb-6">
+            <AdSlot slot="content-top" size="banner" />
+          </div>
+          
+          {@render children()}
+          
+          <!-- Content Bottom Ad -->
+          <div class="mt-8">
+            <AdSlot slot="content-bottom" size="banner" />
+          </div>
+        </div>
 
-<!-- Gradients placed here to prevent it overlapping in transitions -->
-<Layout.Gradients />
+        <!-- Right Sidebar Ad (Desktop Only) -->
+        <div class="hidden xl:block w-64 flex-shrink-0">
+          <div class="sticky top-24 space-y-4">
+            <AdSlot slot="sidebar" size="large" position="right" />
+            <AdSlot slot="sidebar" size="medium" position="right" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <Footer />
+
+  <!-- Toast Container -->
+  <ToastContainer />
+</div>
