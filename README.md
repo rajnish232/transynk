@@ -1,4 +1,4 @@
-# Transynk - Modern File Converter & Compressor
+# vastusphere - Modern File Converter & Compressor
 
 Transform any file format instantly with our privacy-first, modern file converter. Built with SvelteKit, featuring local WebAssembly processing, premium subscriptions, and a beautiful user interface.
 
