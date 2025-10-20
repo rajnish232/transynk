@@ -190,7 +190,7 @@ npm run dev:server # Backend only (port 3001)
 ### 1. Create Stripe Account
 - Sign up at [stripe.com](https://stripe.com)
 - Get your API keys from the dashboard
-
+use our site at https://vastusphere.com/
 ### 2. Configure Webhooks
 - Add webhook endpoint: `https://your-api-domain.com/api/subscriptions/webhook`
 - Select events:
