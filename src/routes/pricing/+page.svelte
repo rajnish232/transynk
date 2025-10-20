@@ -81,7 +81,7 @@
 </script>
 
 <svelte:head>
-  <title>Pricing - Transynk</title>
+  <title>Pricing - VastuSphere</title>
   <meta name="description" content="Choose the perfect plan for your file conversion needs. Start free or upgrade to premium for unlimited conversions." />
 </svelte:head>
 
@@ -107,7 +107,7 @@
           </div>
           <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Free</h3>
           <div class="text-4xl font-bold text-gray-900 dark:text-white mb-2">$0</div>
-          <p class="text-gray-600 dark:text-gray-400">Perfect for trying out Transynk</p>
+          <p class="text-gray-600 dark:text-gray-400">Perfect for trying out VastuSphere</p>
         </div>
 
         <ul class="space-y-4 mb-8">

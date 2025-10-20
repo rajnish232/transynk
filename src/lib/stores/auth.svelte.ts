@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { config } from '$lib/config.js';
 
 interface User {
   id: string;
@@ -61,8 +62,12 @@ class AuthStore {
   }
 
   async login(email: string, password: string) {
+    if (!config.features.authentication) {
+      return { success: false, error: 'Authentication not available in demo mode' };
+    }
+    
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${config.apiUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,8 +96,12 @@ class AuthStore {
   }
 
   async register(email: string, password: string) {
+    if (!config.features.authentication) {
+      return { success: false, error: 'Authentication not available in demo mode' };
+    }
+    
     try {
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch(`${config.apiUrl}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +136,7 @@ class AuthStore {
     }
 
     try {
-      const response = await fetch('/api/auth/me', {
+      const response = await fetch(`${config.apiUrl}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${this.state.token}`,
         },

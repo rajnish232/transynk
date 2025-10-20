@@ -63,7 +63,7 @@
             <span class="text-white font-bold text-lg">T</span>
           </div>
           <span class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Transynk
+            VastuSphere
           </span>
         </a>
       </div>

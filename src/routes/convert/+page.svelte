@@ -9,8 +9,8 @@
 </script>
 
 <svelte:head>
-  <title>File Converter - Convert Any File Format | Transynk</title>
-  <meta name="description" content="Convert any file format with Transynk. Support for images, documents, audio, video, and archives. Choose your output format and download instantly." />
+  <title>File Converter - Convert Any File Format | VastuSphere</title>
+  <meta name="description" content="Convert any file format with VastuSphere. Support for images, documents, audio, video, and archives. Choose your output format and download instantly." />
   <meta name="keywords" content="file converter, convert files, file format converter, online converter, free converter" />
 </svelte:head>
 
@@ -158,7 +158,7 @@
   <!-- Features -->
   <section class="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl p-8">
     <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
-      Why Choose Transynk?
+      Why Choose VastuSphere?
     </h2>
     
     <div class="grid md:grid-cols-3 gap-8">

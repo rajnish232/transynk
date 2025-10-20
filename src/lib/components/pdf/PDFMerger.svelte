@@ -1,7 +1,7 @@
 <script lang="ts">
   import PDFBase from './PDFBase.svelte';
   import { PDFConverter } from '$lib/utils/pdfConverter';
-  import { toast } from '$lib/stores/toast.svelte.ts';
+  import { toastStore } from '$lib/stores/toast.svelte.ts';
 
   const title = 'Merge PDFs';
   const description = 'Combine multiple PDF files into a single document';

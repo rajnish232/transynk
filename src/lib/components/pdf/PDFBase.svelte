@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { toast } from '$lib/stores/toast.svelte.ts';
+  import { toastStore } from '$lib/stores/toast.svelte.ts';
   import type { PDFOperationResult } from '$lib/utils/pdfConverter';
 
   export let title: string;
@@ -67,7 +67,7 @@
     });
     
     if (error) {
-      toast.error(error);
+      toastStore.error(error);
       return;
     }
     
@@ -83,7 +83,7 @@
 
   async function processFiles() {
     if (selectedFiles.length === 0) {
-      toast.error('Please select PDF files to process');
+      toastStore.error('Please select PDF files to process');
       return;
     }
 
@@ -96,13 +96,13 @@
       await performOperation();
       
       if (results.length > 0) {
-        toast.success(`${title} completed successfully!`);
+        toastStore.success(`${title} completed successfully!`);
       } else {
-        toast.error('No results generated');
+        toastStore.error('No results generated');
       }
     } catch (err) {
       error = err instanceof Error ? err.message : 'An error occurred during processing';
-      toast.error(error);
+      toastStore.error(error);
     } finally {
       isProcessing = false;
     }
@@ -132,7 +132,7 @@
 
     // For multiple files, create a zip
     // This would require a zip library like JSZip
-    toast.info('Multiple file download would create a zip file (not implemented yet)');
+    toastStore.info('Multiple file download would create a zip file (not implemented yet)');
   }
 
   // File size formatter

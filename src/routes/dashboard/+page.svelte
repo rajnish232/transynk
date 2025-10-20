@@ -82,8 +82,8 @@
 </script>
 
 <svelte:head>
-  <title>Dashboard - Transynk</title>
-  <meta name="description" content="Manage your Transynk account, view usage statistics, and upgrade your plan." />
+  <title>Dashboard - VastuSphere</title>
+  <meta name="description" content="Manage your VastuSphere account, view usage statistics, and upgrade your plan." />
 </svelte:head>
 
 {#if isLoading}

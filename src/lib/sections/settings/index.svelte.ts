@@ -1,4 +1,4 @@
-import { PUB_VERTD_URL } from "$env/static/public";
+// import { PUB_VERTD_URL } from "$env/static/public";
 import type { ConversionBitrate } from "$lib/converters/ffmpeg.svelte";
 import type { ConversionSpeed } from "$lib/converters/vertd.svelte";
 import { VertdInstance } from "./vertdSettings.svelte";
@@ -44,7 +44,7 @@ export class Settings {
 		useDefaultFormat: false,
 		metadata: true,
 		plausible: true,
-		vertdURL: PUB_VERTD_URL,
+		vertdURL: "https://vertd.vert.sh",
 		vertdSpeed: "slow",
 		magickQuality: 100,
 		ffmpegQuality: "auto",

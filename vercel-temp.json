@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "framework": "svelte",
+  "installCommand": "npm install",
+  "env": {
+    "VITE_API_URL": "https://api.transynk.com",
+    "VITE_STRIPE_PUBLISHABLE_KEY": "pk_test_placeholder"
+  }
+}

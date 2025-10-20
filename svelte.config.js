@@ -23,6 +23,7 @@ const config = {
 		prerender: {
 			handleHttpError: 'warn',
 			handleMissingId: 'warn',
+			handleUnseenRoutes: 'ignore',
 			entries: [
 				'/',
 				'/about',

@@ -4,8 +4,8 @@
 </script>
 
 <svelte:head>
-  <title>About Transynk - Modern File Converter & Compressor</title>
-  <meta name="description" content="Learn about Transynk, the modern file converter that prioritizes privacy, speed, and user experience. Convert and compress files with confidence." />
+  <title>About VastuSphere - Modern File Converter & Compressor</title>
+  <meta name="description" content="Learn about VastuSphere, the modern file converter that prioritizes privacy, speed, and user experience. Convert and compress files with confidence." />
 </svelte:head>
 
 <div class="max-w-4xl mx-auto space-y-16">

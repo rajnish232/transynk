@@ -1,7 +1,7 @@
 <script lang="ts">
   import PDFBase from './PDFBase.svelte';
   import { PDFConverter } from '$lib/utils/pdfConverter';
-  import { toast } from '$lib/stores/toast.svelte.ts';
+  import { toastStore } from '$lib/stores/toast.svelte.ts';
 
   const title = 'Split PDF';
   const description = 'Split a PDF into multiple files by pages or page ranges';

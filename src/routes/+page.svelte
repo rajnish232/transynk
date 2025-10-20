@@ -129,8 +129,8 @@
 </script>
 
 <svelte:head>
-  <title>Transynk - Modern File Converter & Compressor</title>
-  <meta name="description" content="Convert and compress files instantly with Transynk. Support for images, documents, videos, and more. Privacy-first local processing." />
+  <title>VastuSphere - Modern File Converter & Compressor</title>
+  <meta name="description" content="Convert and compress files instantly with VastuSphere. Support for images, documents, videos, and more. Privacy-first local processing." />
 </svelte:head>
 
 <div class="space-y-16">
@@ -222,7 +222,7 @@
   <!-- Features -->
   <section class="max-w-6xl mx-auto">
     <h2 class="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">
-      Why Choose Transynk?
+      Why Choose VastuSphere?
     </h2>
     <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
       {#each features as feature}
